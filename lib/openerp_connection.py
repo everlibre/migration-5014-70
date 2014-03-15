@@ -21,7 +21,6 @@ class module(object):
         form = {'form': {}, 'id': wiz_id, 'report_type': 'pdf', 'ids': [wiz_id]}
         try:
            res = wizard.execute(dbname, uid, pwd, wiz_id, form, 'start')
-           print "res ", res
         except Exception, e:
             print e
 
@@ -31,24 +30,26 @@ class module(object):
         dbname = self.connection.dbname
         uid = self.connection.uid
         pwd = self.connection.pwd
+        connection = self.connection
 
-
-        model_data_ids = object.execute(dbname,uid,pwd, 'ir.model.data', 'search', [('module', "=", module_name), ('noupdate', '=', False)])
-        translation_ids = object.execute(dbname,uid,pwd, 'ir.translation', 'search', [('name', "like", '%' + module_name)])
+        model_data_ids = connection.search( 'ir.model.data', [('module', "=", module_name), ('noupdate', '=', False)])
+        translation_ids = connection.search( 'ir.translation', [('name', "like",  module_name)])
         nbr = len(model_data_ids)
         x = 0
         for id in model_data_ids:
             x = x + 1
             print "%s/%s" % (x, nbr), id
-            model_data = object.execute(dbname,uid,pwd ,'ir.model.data', 'read', id)
+            model_data = connection.read('ir.model.data', id)
             try:
-                object.execute(dbname,uid,pwd, model_data['model'], 'unlink', model_data['res_id'])
+                connection.unlink(model_data['model'],  model_data['res_id'])
             except Exception, e:
                 print "Erreur Supression ", model_data['model'],e
                 pass
-            object.execute(dbname,uid,pwd, 'ir.model.data', 'unlink', [id])
-        object.execute(dbname, uid, pwd,'ir.module.module','write',module_id,{'state': 'uninstalled'})
-        object.execute(dbname, uid, pwd, 'ir.module.module','unlink',module_id)
+            connection.unlink('ir.model.data',  [id])
+        try:
+            connection.unlink('ir.module.module',module_id)
+        except:
+            pass
         print "%s removed"%module_name
 
 
@@ -58,18 +59,19 @@ class module(object):
         dbname = self.connection.dbname
         uid = self.connection.uid
         pwd = self.connection.pwd
+        connection = self.connection
         module_ids =[]
         if module_name <> 'all':
-            module_id= object.execute(dbname, uid, pwd, 'ir.module.module','search', [('name', '=', module_name)])
+            module_id  = connection.search('ir.module.module',  [('name', '=', module_name)])
             if module_id:
                 module_ids.append(module_id[0])
         else:
-            module_ids =  object.execute(dbname, uid, pwd, 'ir.module.module','search', [],0,100000,'name asc')
+            module_ids = connection.search( 'ir.module.module',  [],0,100000,'name asc')
 
         for module_id in module_ids:
             if module_id:
-                module = object.execute(dbname, uid, pwd, 'ir.module.module', 'read', module_id)
-                
+                module = connection.read( 'ir.module.module',  module_id)
+
                 print "Sur base %10s module %40s Latest Version %10s Installed Version %10s state %15s " % (dbname,module['name']+(''*(20-len(module['name']))), module['installed_version'], module['latest_version'],module['state']),
                 if module['state'] == "installed" and module['installed_version']<> module['latest_version']:
                     print "upgradable"
@@ -81,36 +83,52 @@ class module(object):
                     print
             else:
                 print "installable "
-    
-    
+
+
     def uninstall(self, module_name=None, module_id=None):
+        connection = self.connection
         object = self.connection.object
         wizard = self.connection.wizard
         dbname = self.connection.dbname
         uid = self.connection.uid
         pwd = self.connection.pwd
         if not module_id and module_name:
-            module_id= object.execute(dbname, uid, pwd, 'ir.module.module','search', [('name', '=', module_name)])
+            module_id = connection.search('ir.module.module', [('name', '=', module_name)])
             if module_id:
                 module_id = module_id[0]
 
         if module_id:
             print "Module ID ", module_id
-            module = object.execute(dbname, uid, pwd, 'ir.module.module', 'read', module_id)
-            module_dependency_ids = object.execute(dbname, uid, pwd, 'ir.module.module.dependency', 'search', [('name', '=', module['name'])])
+            module = connection.read('ir.module.module',  module_id)
+            if module['state'] == 'installed':
+                module_dependency_ids = connection.search('ir.module.module.dependency',  [('name', '=', module['name'])])
 
-            if module_dependency_ids:
-                for id in module_dependency_ids:
-                    module_dependency = object.execute(dbname, uid, pwd, 'ir.module.module.dependency', 'read', id)
-                    dependant = object.execute(dbname, uid, pwd, 'ir.module.module', 'read', module_dependency['module_id'][0])
-                    if dependant['state'] == 'installed':
-                        print "Module", module_dependency['module_id'][1]
-                        object.execute(dbname, uid, pwd, 'ir.module.module', 'button_uninstall', [module_dependency['module_id'][0]])
-                        self.upgrade()
-                        print "Uninstall dependance %s " % dependant['name']
-            print "Uninstall Module  %s " % module['name']
-            object.execute(dbname, uid, pwd, 'ir.module.module', 'button_uninstall', [module_id])
-            self.upgrade()
+                if module_dependency_ids:
+                    for id in module_dependency_ids:
+                        module_dependency =  connection.read('ir.module.module.dependency',[id])
+                        if  module_dependency:
+                            module_dependency = module_dependency[0]
+
+                        dependant = connection.read('ir.module.module', [module_dependency['module_id'][0]])
+                        if dependant:
+                            dependant = dependant[0]
+                            if dependant['state'] == 'installed':
+                                print "Module", module_dependency['module_id'][1]
+                                self.uninstall(module_id = module_dependency['module_id'][0])
+                                self.upgrade()
+                                print "Uninstall dependance %s " % dependant['name']
+
+                group_model_ids = connection.search('ir.model.data',[('model','=','res.groups'),('module','=',module['name'])])
+                group_ids = []
+                for id in group_model_ids:
+                    data = connection.read('ir.model.data',[id])
+                    if data and data[0] and data[0]['res_id']:
+                        group_ids.append(data[0]['res_id'])
+                if group_ids:
+                    connection.write('res.groups',group_ids,{'users':[(6,0,[])]})
+                print "Uninstall Module  %s " % module['name']
+                object.execute(dbname, uid, pwd, 'ir.module.module', 'button_uninstall', [module_id])
+                self.upgrade()
         else:
             return None
 
@@ -122,15 +140,14 @@ class module(object):
         pwd = self.connection.pwd
         self.update_list()
         if not module_id and module_name:
-            module_id = object.execute(dbname, uid, pwd, 'ir.module.module', 'search', [('name', '=', module_name)])
+            module_id =  self.connection.search('ir.module.module', [('name', '=', module_name),('state','!=','installed')])
             if module_id:
                 module_id = module_id[0]
-        elif self.module_id:
-            module_id = self.module_id
         if module_id:
             object.execute(dbname, uid, pwd, 'ir.module.module', 'button_install', [module_id])
             form = {'form': {}, 'id': module_id, 'report_type': 'pdf', 'ids': [module_id]}
             wiz_id = wizard.create(dbname, uid, pwd, 'module.upgrade.simple')
+            print " Install %s " % module_name
             try:
                 wizard.execute(dbname, uid, pwd, wiz_id, form, 'start')
             except Exception, e:
@@ -145,12 +162,14 @@ class module(object):
         dbname = self.connection.dbname
         uid = self.connection.uid
         pwd = self.connection.pwd
-        menu_id = object.execute(dbname, uid, pwd, 'ir.ui.menu', 'search', [('name', '=', 'Update Modules List')])
+        connection = self.connection
+        menu_id =  connection.search('ir.ui.menu', [('name', '=', 'Update Modules List')])
         if menu_id:
             form = {'form': {'repositories': False}, 'ids': menu_id, 'report_type': 'pdf', 'model': 'ir.ui.menu', 'id': menu_id[0]}
             wiz_id = wizard.create(dbname, uid, pwd, 'module.module.update')
             try:
                 wizard.execute(dbname, uid, pwd, wiz_id, form, 'update')
+                print "Update list ok "
             except Exception, e:
                 print "Update Error "
                 print e
@@ -162,17 +181,19 @@ class module(object):
         dbname = self.connection.dbname
         uid = self.connection.uid
         pwd = self.connection.pwd
+        connection = self.connection
         self.update_list()
         self.connection.clean_ir_values()
         self.connection.clean_ir_model_data()
-        module_ids = object.execute(dbname, uid, pwd, 'ir.module.module', 'search', [], 0, 9000)
+        module_ids =  connection.search('ir.module.module', [], 0, 9000)
         for module_id in module_ids:
-            module = object.execute(dbname, uid, pwd, 'ir.module.module', 'read', module_id)
+            module =  connection.read('ir.module.module', module_id)
             if  module['latest_version'] == None or module['installed_version'].replace(' ', '') == '':
                 print module['name'], module['installed_version'], module['latest_version'], "ready to remove"
                 self.remove(module_name=module['name'],module_id=module_id)
                 self.connection.clean_ir_values()
                 self.connection.clean_ir_model_data()
+        print "Clean OK"
 
     def update_all(self,):
         object = self.connection.object
@@ -180,10 +201,11 @@ class module(object):
         dbname = self.connection.dbname
         uid = self.connection.uid
         pwd = self.connection.pwd
+        connection = self.connection
         self.update_list()
-        module_ids = object.execute(dbname, uid, pwd, 'ir.module.module', 'search', [('state', '=', 'installed')], 0, 9000)
+        module_ids =  connection.search('ir.module.module', [('state', '=', 'installed')], 0, 9000)
         for module_id in module_ids:
-            module = object.execute(dbname, uid, pwd, 'ir.module.module', 'read', module_id, ['installed_version', 'latest_version'])
+            module =  connection.read('ir.module.module', module_id, ['installed_version', 'latest_version'])
             if module['latest_version'] <> None and module['installed_version'] <> None  and module['installed_version'] <> module['latest_version']:
                 self.update(module_id=module_id)
         return True
@@ -207,9 +229,7 @@ class module(object):
                 form = {'form': {}, 'id': module_id, 'report_type': 'pdf', 'ids': [module_id]}
                 wiz_id = wizard.create(dbname, uid, pwd, 'module.upgrade')
                 try:
-                    print "execute wizard"
                     res = wizard.execute(dbname, uid, pwd, wiz_id, form, 'start')
-                    print "fin execute wizard"
                 except Exception, e:
                     print "-"*50
                     print "Update Module Error %s " % module['name']
@@ -219,7 +239,7 @@ class module(object):
                 print "fin update %s  la version est maintenant %s  " % (module['name'], module['installed_version'])
 
 class openerp(object):
-    def __init__(self, protocole="http://", host="127.0.0.1", port="8069", dbname="terp", user="admin", pwd="admin"):
+    def __init__(self, protocole="http://", host="127.0.0.1", port="8069", dbname="terp", user="admin", pwd="admin",otp=None):
         if protocole not in ('http://', 'https://'):
             raise Exception('Error', 'Protocole non valide')
         self.dbname = dbname
@@ -227,9 +247,10 @@ class openerp(object):
         self.pwd = pwd
         self.host = host
         self.protocole = protocole
+        self.otp = otp
         self.url = protocole + host + ":" + str(port)
         self.server = xmlrpclib.ServerProxy(self.url + '/xmlrpc/common', allow_none=True)
-        self.uid = self.server.login(self.dbname, self.user, self.pwd)
+        self.uid = self.server.login(self.dbname, self.user, self.pwd, otp)
         self.object = xmlrpclib.ServerProxy(self.url + '/xmlrpc/object', allow_none=True)
         self.wizard = xmlrpclib.ServerProxy(self.url + '/xmlrpc/wizard', allow_none=True)
         self.report = xmlrpclib.ServerProxy(self.url + '/xmlrpc/report', allow_none=True)
@@ -282,8 +303,11 @@ class openerp(object):
     def __str__(self):
         return '%s [%s]' % (self.url, self.dbname)
 
-    def execute(self, module, action, ids, offset=0, limit=9999999, order=False,context=None):
-        return self.object.execute(self.dbname, self.uid, self.pwd, module, action, ids, offset, limit, order,context)
+    def exec_act(self, module, action,context=None):
+        return self.object.execute(self.dbname, self.uid, self.pwd, module, action,context)
+
+    def execute(self, module, action, ids=None, context=None):
+        return self.object.execute(self.dbname, self.uid, self.pwd, module, action, ids, context)
 
     def search(self, module, pattern=[], offset=0, limit=9999999, order=False,context=None):
         return self.object.execute(self.dbname, self.uid, self.pwd, module, 'search', pattern, offset, limit, order,context)
