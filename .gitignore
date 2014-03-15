@@ -1,0 +1,6 @@
+*.pyc
+*.jasper
+*.pdf
+*.log
+*.err
+.idea
