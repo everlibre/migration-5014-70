@@ -41,6 +41,15 @@ def recree_db(OPTIONS):
 def migration(OPTIONS):
     BASECIBLE = OPTIONS.dbc
     BASESOURCE = OPTIONS.dbs
+
+
+
+    if OPTIONS.userc == 'terp':
+        OPTIONS.userc = "admin"
+        OPTIONS.passwdc = "admin"
+
+    if OPTIONS.dbc == 'terp':
+        OPTIONS.dbc = OPTIONS.dbs
     print
     print "-" * 80
     print
@@ -48,7 +57,7 @@ def migration(OPTIONS):
     START = datetime.now()
     if OPTIONS.createdb:
         try:
-            os.remove("/tmp/migration-%s.sqlite" % BASESOURCE)
+            os.remove("/media/mint/migration-%s.sqlite" % BASESOURCE)
         except:
             pass
         fname = "/tmp/%s_model.sql" % BASECIBLE
@@ -151,7 +160,7 @@ def migration(OPTIONS):
         print "Migration %s" % BASESOURCE
         print
         try:
-            migration.pass_admin_new_base = 'password'
+            migration.pass_admin_new_base = 'uniforme'
             migration.load_fields()
             #if OPTIONS.createdb == 'true':
             vals = migration.get_values(1, 'res.company', ['name'])
@@ -192,6 +201,7 @@ def migration(OPTIONS):
         mail_envoye['From'] = "eric@vernichon.fr"
         mail_envoye['Subject'] = "Migration %s " % BASESOURCE
         mail_envoye['To'] = 'eric@vernichon.fr'
+        #envoi = SMTP('192.168.12.15')
         envoi = SMTP('smtp.free.fr')
         envoi.sendmail(mail_envoye['From'], ['eric@vernichon.fr'], mail_envoye.as_string())
         X += 1
@@ -219,11 +229,12 @@ def main():
     PARSER.add_option("-s", "--serveurs", dest="hosts", default='127.0.0.1', help="Adresse  Serveur source")
 
     PARSER.add_option("-p", "--protocoles", dest="protocoles", default='http', help="protocole http/https source")
-    PARSER.add_option("-D", "--dbc", dest="dbc", default='terp_v70', help="Nom de la base cible ")
+    PARSER.add_option("-D", "--dbc", dest="dbc", default='testmulti', help="Nom de la base cible ")
     PARSER.add_option("-U", "--userc", dest="userc", default='terp', help="User Openerp cible")
     PARSER.add_option("-W", "--passwdc", dest="passwdc", default='terp', help="mot de passe Openerp cible  ")
     PARSER.add_option("-S", "--serveurc", dest="hostc", default='127.0.0.1', help="Adresse  Serveur cible")
     PARSER.add_option("-m", "--module", dest="module", default='all', help="module")
+    PARSER.add_option("-l", "--lines", dest="lines", default=True, help="With move line")
 
     PARSER.add_option("-a", "--userdbc", dest="userdbc", default='postgres', help="User Postgres db Cible")
     PARSER.add_option("-b", "--passwordbc", dest="passdbc", default='password', help="Password User Postgres db Cible")

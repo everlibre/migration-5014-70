@@ -252,6 +252,9 @@ if __name__ == "__main__":
     app = wx.PySimpleApp(0)
     wx.InitAllImageHandlers()
     frame_1 = MyFrame(None, -1, "")
+    cursor = wx.StockCursor(wx.CURSOR_ARROWWAIT)
+    print cursor
+    frame_1.SetCursor(cursor)
     app.SetTopWindow(frame_1)
     frame_1.Show()
     app.MainLoop()

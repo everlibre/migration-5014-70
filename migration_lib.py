@@ -431,7 +431,9 @@ class MigrationLib(object):
 
         except BaseException, erreur_base:
             self.__affiche__erreur(erreur_base, 0, vals, 'write migre_res_users')
-
+        # group_ids.pop(self.connectioncible.search('res.groups', [('name', '=', 'Technical Features')])[0])
+        # group_ids.pop(self.connectioncible.search('res.groups', [('name', '=', 'Settings')])[0])
+        # group_ids.pop(self.connectioncible.search('res.groups', [('name', '=', 'Access Rights')])[0])
         group_ids = self.connectioncible.search('res.groups',
                                                 [('name', '=', 'Employee')])
         for old_user_id in users_ids:
@@ -442,7 +444,7 @@ class MigrationLib(object):
             user = self.connectioncible.search('res.users',
                                                [('active', 'in', ['true', 'false']), ('login', '=', vals['login'])], 0,
                                                1)
-            vals['password'] = "Password10$"
+            vals['password'] = "Uniforme10$"
             vals['company_ids'] = [self.company_id]
             vals['company_id'] = self.company_id
             vals['company_ids'] = [(6, 0, [self.company_id])]
@@ -845,7 +847,7 @@ class MigrationLib(object):
         """ Migration annee fiscale et periode """
         self.tables_processed.append('account.fiscalyear')
         newfy = None
-        account_fiscalyear_ids = self.connectionsource.search('account.fiscalyear', [], 0, 10000, 'date_stop desc')
+        account_fiscalyear_ids = self.connectionsource.search('account.fiscalyear', [], 0, 100 , 'date_stop desc')
         for account_fiscalyear_id in account_fiscalyear_ids:
 
             valsfiscal = self.get_values(account_fiscalyear_id, 'account.fiscalyear',
@@ -862,46 +864,47 @@ class MigrationLib(object):
             try:
                 newfy = self.connectioncible.create('account.fiscalyear', valsfiscal)
                 self.add_old_id(account_fiscalyear_id, newfy, 'account.fiscalyear')
-            except BaseException, erreur_base:
-                self.__affiche__erreur(erreur_base, account_fiscalyear_id, valsfiscal, "create fiscalyear")
 
-            account_period_ids = self.connectionsource.search('account.period',
-                                                              [('fiscalyear_id', '=', account_fiscalyear_id)], 0, 20000,
-                                                              'id asc')
-            for account_period in account_period_ids:
-                period_read = self.connectionsource.read('account.period', account_period)
-                res = self.connectioncible.search('account.period', [('company_id', '=', self.company_id),
-                                                                     ('date_start', '=', period_read['date_start']),
-                                                                     ('date_stop', '=', period_read['date_stop'])], 0,
-                                                  20000, 'id asc')
-                if not res:
-                    vals = self.get_values(account_period, 'account.period')
-                    vals['fiscalyear_id'] = newfy
-                    vals['company_id'] = self.company_id
-                    vals['state'] = 'draft'
 
-                    try:
-                        res = self.connectioncible.create('account.period', vals)
-                        self.add_old_id(account_period, res, 'account.period')
-                    except BaseException, erreur_base:
+                account_period_ids = self.connectionsource.search('account.period',
+                                                                  [('fiscalyear_id', '=', account_fiscalyear_id)], 0, 20000,
+                                                                  'id asc')
+                for account_period in account_period_ids:
+                    period_read = self.connectionsource.read('account.period', account_period)
+                    res = self.connectioncible.search('account.period', [('company_id', '=', self.company_id),
+                                                                         ('date_start', '=', period_read['date_start']),
+                                                                         ('date_stop', '=', period_read['date_stop'])], 0,
+                                                      20000, 'id asc')
+                    if not res:
+                        vals = self.get_values(account_period, 'account.period')
+                        vals['fiscalyear_id'] = newfy
+                        vals['company_id'] = self.company_id
+                        vals['state'] = 'draft'
 
                         try:
-                            vals['name'] = vals['name'] + vals['date_stop'].split('-')[0]
-                            vals['code'] = vals['code'] + vals['date_stop'].split('-')[0]
                             res = self.connectioncible.create('account.period', vals)
                             self.add_old_id(account_period, res, 'account.period')
                         except BaseException, erreur_base:
+
+                            try:
+                                vals['name'] = vals['name'] + vals['date_stop'].split('-')[0]
+                                vals['code'] = vals['code'] + vals['date_stop'].split('-')[0]
+                                res = self.connectioncible.create('account.period', vals)
+                                self.add_old_id(account_period, res, 'account.period')
+                            except BaseException, erreur_base:
+                                self.__affiche__erreur(erreur_base, account_period, vals, "__migre_acc_fiscal_year")
+
+                    elif (period_read['date_start'] >= valsfiscal['date_start']
+                          and period_read['date_stop'] <= valsfiscal['date_stop']):
+                        vals = {}
+
+                        try:
+                            self.connectioncible.write('account.period', res[0], vals)
+                            self.add_old_id(account_period, res[0], 'account.period')
+                        except BaseException, erreur_base:
                             self.__affiche__erreur(erreur_base, account_period, vals, "__migre_acc_fiscal_year")
-
-                elif (period_read['date_start'] >= valsfiscal['date_start']
-                      and period_read['date_stop'] <= valsfiscal['date_stop']):
-                    vals = {}
-
-                    try:
-                        self.connectioncible.write('account.period', res[0], vals)
-                        self.add_old_id(account_period, res[0], 'account.period')
-                    except BaseException, erreur_base:
-                        self.__affiche__erreur(erreur_base, account_period, vals, "__migre_acc_fiscal_year")
+            except BaseException, erreur_base:
+                self.__affiche__erreur(erreur_base, account_fiscalyear_id, valsfiscal, "create fiscalyear")
 
     def __get_acc_pay_term(self, term_name=None):
         """ Migration des termes de payment """
@@ -1194,7 +1197,7 @@ class MigrationLib(object):
             ('statement_id', '=', account_bank_statement_id)], 0, 1000000, 'id asc')
         for account_bank_statement_line_id in account_bank_statement_line_ids:
             vals = self.get_values(account_bank_statement_line_id, 'account.bank.statement.line',
-                                   ['type', 'account_id', 'amount', 'date', 'partner_id', 'name'])
+                                   ['type', 'reconcile_id','account_id', 'amount', 'date', 'partner_id', 'name'])
             vals['company_id'] = self.company_id
             vals['statement_id'] = new_account_bank_statement_id
 
@@ -1306,8 +1309,8 @@ class MigrationLib(object):
         source_total_invoice = self.curseur_source.fetchall()[0][0]
         self.curseur.execute('select sum(amount_total)::float from account_invoice')
         cible_total_invoice = self.curseur.fetchall()[0][0]
-        if abs(source_total_invoice - cible_total_invoice) > 0.1 or \
-            abs(source_total_invoice_line - cible_total_invoice_line) > 0.1:
+        if cible_total_invoice and source_total_invoice and  (abs(source_total_invoice - cible_total_invoice) > 0.1 or \
+            abs(source_total_invoice_line - cible_total_invoice_line) > 0.1):
             print "cible_total_invoice %s source_total_invoice % ecart  ", (
                 cible_total_invoice, source_total_invoice, source_total_invoice - cible_total_invoice)
             print "cible_total_invoice_line %s source_total_invoice_line % ecart  ", (
@@ -2294,18 +2297,19 @@ class MigrationLib(object):
         self.__migre_acc_fiscal_year()
         print "Migre Analytic Account"
         self.__migre_acc_analytic_acc()
-        print "Migre bank statement"
-        self.__migre_account_bank_statement()
-        if self.reconciliation:
-            print "Migre reconcile"
-            self.migre_reconcile()
-        print "Migre Account_move"
-        self.__migre_account_move()
-        print "Migre Analytic line"
-        self.__migre_acc_analytic_line()
-        print "Migre Account_invoice"
-        self.__migre_account_invoice()
-        self.controle_analytique()
+        if self.options.lines:
+            print "Migre bank statement"
+            self.__migre_account_bank_statement()
+            if self.reconciliation:
+                print "Migre reconcile"
+                self.migre_reconcile()
+            print "Migre Account_move"
+            self.__migre_account_move()
+            print "Migre Analytic line"
+            self.__migre_acc_analytic_line()
+            print "Migre Account_invoice"
+            self.__migre_account_invoice()
+            self.controle_analytique()
         res = self.connectioncible.search('ir.actions.todo', [])
         res = self.connectioncible.write('ir.actions.todo', res, {'state': 'done'})
         #self.close_period()
